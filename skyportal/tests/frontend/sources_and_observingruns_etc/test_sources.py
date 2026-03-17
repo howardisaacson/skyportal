@@ -137,6 +137,73 @@ def test_public_source_page_null_z(driver, user, public_source, public_group):
 
 
 @pytest.mark.flaky(reruns=3)
+def test_photometry_plot_legend_uses_instrument_fallback(
+    driver,
+    user,
+    public_source,
+    public_group,
+    upload_data_token,
+    sedm,
+    photometric_series,
+):
+    status, data = api(
+        "POST",
+        "photometry",
+        data={
+            "obj_id": str(public_source.id),
+            "mjd": 58010.0,
+            "instrument_id": sedm.id,
+            "flux": 12.24,
+            "fluxerr": 0.031,
+            "zp": 25.0,
+            "magsys": "ab",
+            "filter": "sdssg",
+            "group_ids": [public_group.id],
+            "origin": "frontend-legend-test",
+        },
+        token=upload_data_token,
+    )
+    assert status == 200
+    assert data["status"] == "success"
+
+    driver.get(f"/become_user/{user.id}")
+    driver.get(f"/source/{public_source.id}")
+    driver.wait_for_xpath(f'//h6[text()="{public_source.id}"]')
+    driver.wait_for_xpath(
+        '//div[@id="photometry-plot"]/div/div/div[@class="plot-container plotly"]',
+        timeout=10,
+    )
+
+    driver.wait_for_xpath(
+        f'//div[@id="photometry-plot"]//*[name()="text" and normalize-space()="{sedm.name}/sdssg"]',
+        timeout=10,
+    )
+    driver.wait_for_xpath(
+        f'//div[@id="photometry-plot"]//*[name()="text" and normalize-space()="{photometric_series.instrument.name}/{photometric_series.filter}"]',
+        timeout=10,
+    )
+
+    assert (
+        len(
+            driver.find_elements(
+                By.XPATH,
+                '//div[@id="photometry-plot"]//*[name()="text" and contains(normalize-space(), "undefined/")]',
+            )
+        )
+        == 0
+    )
+    assert (
+        len(
+            driver.find_elements(
+                By.XPATH,
+                f'//div[@id="photometry-plot"]//*[name()="text" and contains(normalize-space(), "{photometric_series.origin}")]',
+            )
+        )
+        == 0
+    )
+
+
+@pytest.mark.flaky(reruns=3)
 def test_analysis_start(
     driver, user, public_source, analysis_service_token, public_group
 ):
